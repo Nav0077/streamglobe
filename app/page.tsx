@@ -7,8 +7,8 @@ import Header from './components/UI/Header';
 import StatsBar from './components/UI/StatsBar';
 import StreamCard from './components/StreamPanel/StreamCard';
 import Globe from './components/Globe/Globe';
-import { Stream, Platform, Category } from './lib/types';
-import { PLATFORM_COLORS } from './lib/constants';
+import { Stream, Platform, Category } from '@/lib/types';
+import { PLATFORM_COLORS } from '@/lib/constants';
 
 const CATEGORIES: Category[] = ['Gaming', 'News', 'Entertainment', 'Education', 'Technology', 'Other'];
 
