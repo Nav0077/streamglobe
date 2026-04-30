@@ -1,5 +1,7 @@
 // app/api/cron/refresh/route.ts
 
+export const dynamic = 'force-dynamic';
+
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
 import { fetchYouTubeLiveStreams } from '@/lib/platforms/youtube';
