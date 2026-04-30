@@ -34,16 +34,19 @@ export default function Header({ stats, totalStreams }: HeaderProps) {
         </div>
 
         {/* Stats */}
-        <div className="flex items-center gap-4">
-          {/* Per-platform stats */}
-          <div className="hidden md:flex items-center gap-3">
+        <div className="flex items-center gap-2 sm:gap-4">
+          {/* Per-platform stats - Hidden on small mobile */}
+          <div className="hidden sm:flex items-center gap-3">
             {stats.map((stat) => (
-              <div key={stat.platform} className="flex items-center gap-1.5">
+              <div key={stat.platform} className="flex items-center gap-1.5 group cursor-default">
                 <div
-                  className="w-2 h-2 rounded-full"
-                  style={{ backgroundColor: PLATFORM_COLORS[stat.platform].hex }}
+                  className="w-1.5 h-1.5 rounded-full shadow-[0_0_5px_currentColor]"
+                  style={{ 
+                    backgroundColor: PLATFORM_COLORS[stat.platform].hex,
+                    color: PLATFORM_COLORS[stat.platform].hex 
+                  }}
                 />
-                <span className="text-xs text-gray-400">
+                <span className="text-[10px] text-gray-500 group-hover:text-gray-300 transition-colors">
                   {stat.liveCount}
                 </span>
               </div>
@@ -51,16 +54,16 @@ export default function Header({ stats, totalStreams }: HeaderProps) {
           </div>
 
           {/* Total stats */}
-          <div className="flex items-center gap-3 text-sm">
-            <div className="flex items-center gap-1">
-              <span className="w-2 h-2 bg-red-500 rounded-full animate-pulse" />
-              <span className="text-gray-300 font-semibold">
-                {totalStreams} live
+          <div className="flex items-center gap-2 sm:gap-3 text-[10px] sm:text-xs">
+            <div className="flex items-center gap-1.5 px-2 py-1 bg-red-500/10 rounded-full border border-red-500/20">
+              <span className="w-1.5 h-1.5 bg-red-500 rounded-full animate-pulse" />
+              <span className="text-red-400 font-bold uppercase tracking-wider">
+                {totalStreams} LIVE
               </span>
             </div>
-            <div className="text-gray-500">|</div>
-            <div className="text-gray-400">
-              👁 {formatViewerCount(totalViewers)} watching
+            <div className="hidden xs:block text-gray-700">|</div>
+            <div className="hidden xs:flex items-center gap-1 text-gray-400 font-medium">
+              👁 {formatViewerCount(totalViewers)}
             </div>
           </div>
         </div>

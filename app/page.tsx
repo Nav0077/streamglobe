@@ -76,10 +76,12 @@ export default function Home() {
 
       <main className="pt-16 flex flex-col lg:flex-row min-h-screen">
         {/* Left Sidebar - Stream List */}
-        <aside className="w-full lg:w-[360px] lg:h-[calc(100vh-64px)] lg:sticky lg:top-16 
-                          border-r border-gray-800/50 overflow-y-auto p-4 space-y-4 order-2 lg:order-1">
+        <aside className="w-full lg:w-[400px] lg:h-[calc(100vh-64px)] lg:sticky lg:top-16 
+                          border-r border-gray-800/50 overflow-y-auto p-4 space-y-6 order-2 lg:order-1 
+                          bg-gray-950/50 backdrop-blur-sm">
           {/* Filters */}
-          <div className="space-y-3">
+          <div className="space-y-4 bg-gray-900/30 p-4 rounded-2xl border border-white/5">
+            <h3 className="text-xs font-bold text-gray-500 uppercase tracking-widest px-1">Search & Filters</h3>
             <SearchBar value={search} onChange={setSearch} />
             <PlatformFilter
               selectedPlatforms={platforms}
@@ -89,44 +91,57 @@ export default function Home() {
           </div>
 
           {/* Stats */}
-          <StatsBar stats={stats} />
+          <div className="space-y-2">
+             <h3 className="text-xs font-bold text-gray-500 uppercase tracking-widest px-1">Live Statistics</h3>
+             <StatsBar stats={stats} />
+          </div>
 
           {/* Stream List */}
-          <div className="space-y-2">
-            <h3 className="text-sm font-semibold text-gray-400 uppercase tracking-wide">
-              Top Live Streams ({total})
-            </h3>
-            {isLoading ? (
-              <div className="space-y-2">
-                {[...Array(5)].map((_, i) => (
-                  <div
-                    key={i}
-                    className="h-16 bg-gray-800/30 rounded-xl animate-pulse"
+          <div className="space-y-3">
+            <div className="flex items-center justify-between px-1">
+              <h3 className="text-xs font-bold text-gray-500 uppercase tracking-widest">
+                Top Streams ({total})
+              </h3>
+              {isLoading && <span className="text-[10px] text-blue-400 animate-pulse font-bold uppercase">Refreshing...</span>}
+            </div>
+            
+            <div className="space-y-2 max-h-[500px] lg:max-h-none overflow-y-auto pr-2 custom-scrollbar">
+              {isLoading && streams.length === 0 ? (
+                <div className="space-y-2">
+                  {[...Array(6)].map((_, i) => (
+                    <div
+                      key={i}
+                      className="h-20 bg-gray-900/50 rounded-xl animate-pulse border border-white/5"
+                    />
+                  ))}
+                </div>
+              ) : topStreams.length > 0 ? (
+                topStreams.map((stream) => (
+                  <StreamCard
+                    key={stream.id}
+                    stream={stream}
+                    onClick={handleMarkerClick}
+                    isSelected={selectedStream?.id === stream.id}
                   />
-                ))}
-              </div>
-            ) : topStreams.length > 0 ? (
-              topStreams.map((stream) => (
-                <StreamCard
-                  key={stream.id}
-                  stream={stream}
-                  onClick={handleMarkerClick}
-                  isSelected={selectedStream?.id === stream.id}
-                />
-              ))
-            ) : (
-              <div className="text-center py-8 text-gray-500">
-                <p>No live streams found</p>
-                <p className="text-xs mt-1">Try adjusting your filters</p>
-              </div>
-            )}
+                ))
+              ) : (
+                <div className="text-center py-12 bg-gray-900/20 rounded-3xl border border-dashed border-gray-800">
+                  <p className="text-gray-400 font-medium">No live streams found</p>
+                  <p className="text-xs text-gray-600 mt-2">Try adjusting your filters or platform selection</p>
+                </div>
+              )}
+            </div>
           </div>
         </aside>
 
         {/* Main Globe Area */}
-        <div className="flex-1 flex items-center justify-center p-4 order-1 lg:order-2 
-                        min-h-[60vh] lg:min-h-0">
-          <div className="relative w-full max-w-[800px]">
+        <div className="flex-1 flex flex-col items-center justify-center p-4 lg:p-12 order-1 lg:order-2 
+                        relative overflow-hidden">
+          {/* Background Ambient Glows */}
+          <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-blue-600/10 rounded-full blur-[128px] -z-10 animate-pulse" />
+          <div className="absolute bottom-1/4 right-1/4 w-96 h-96 bg-purple-600/10 rounded-full blur-[128px] -z-10 animate-pulse delay-1000" />
+          
+          <div className="relative w-full max-w-[850px] transition-all duration-1000 ease-out">
             <Globe
               markers={markers}
               focusPoint={focusPoint}
@@ -134,30 +149,45 @@ export default function Home() {
               onMarkerClick={handleMarkerClick}
             />
 
-            {/* Floating legend */}
-            <div className="absolute bottom-4 left-4 bg-gray-900/80 backdrop-blur-md 
-                            rounded-xl p-3 border border-gray-700/30">
-              <div className="text-xs text-gray-400 mb-2 font-semibold">Platforms</div>
-              <div className="space-y-1.5">
+            {/* Floating Legend - Desktop only */}
+            <div className="hidden md:block absolute bottom-8 left-8 bg-gray-900/60 backdrop-blur-xl 
+                            rounded-2xl p-4 border border-white/10 shadow-2xl">
+              <div className="text-[10px] text-gray-500 mb-3 font-black uppercase tracking-widest">Active Platforms</div>
+              <div className="space-y-2">
                 {stats.map((stat) => (
-                  <div key={stat.platform} className="flex items-center gap-2 text-xs">
+                  <div key={stat.platform} className="flex items-center gap-3 text-xs group cursor-default">
                     <div
-                      className="w-2.5 h-2.5 rounded-full"
+                      className="w-2.5 h-2.5 rounded-full shadow-lg group-hover:scale-125 transition-transform"
                       style={{
                         backgroundColor:
                           PLATFORM_COLORS_MAP[stat.platform],
+                        boxShadow: `0 0 10px ${PLATFORM_COLORS_MAP[stat.platform]}44`
                       }}
                     />
-                    <span className="text-gray-300 capitalize">
+                    <span className="text-gray-300 font-medium capitalize">
                       {stat.platform}
                     </span>
-                    <span className="text-gray-500">
-                      ({stat.liveCount})
+                    <span className="text-gray-500 font-mono">
+                      {stat.liveCount.toLocaleString()}
                     </span>
                   </div>
                 ))}
               </div>
             </div>
+          </div>
+          
+          {/* Mobile Legend - Simple version */}
+          <div className="flex md:hidden flex-wrap justify-center gap-4 mt-6 p-4 bg-gray-900/40 rounded-2xl border border-white/5 w-full">
+            {stats.map((stat) => (
+              <div key={stat.platform} className="flex items-center gap-1.5 text-[10px]">
+                <div
+                  className="w-2 h-2 rounded-full"
+                  style={{ backgroundColor: PLATFORM_COLORS_MAP[stat.platform] }}
+                />
+                <span className="text-gray-400 capitalize font-bold">{stat.platform}</span>
+                <span className="text-gray-600">{stat.liveCount}</span>
+              </div>
+            ))}
           </div>
         </div>
       </main>
