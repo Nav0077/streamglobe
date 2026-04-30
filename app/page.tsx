@@ -7,7 +7,7 @@ import Header from './components/UI/Header';
 import StatsBar from './components/UI/StatsBar';
 import StreamCard from './components/StreamPanel/StreamCard';
 import Globe from './components/Globe/Globe';
-import { Stream, Platform, Category } from '@/lib/types';
+import { Stream, Platform, Category, PlatformStats } from '@/lib/types';
 import { PLATFORM_COLORS } from '@/lib/constants';
 
 const CATEGORIES: Category[] = ['Gaming', 'News', 'Entertainment', 'Education', 'Technology', 'Other'];
@@ -39,6 +39,14 @@ export default function Home() {
   useEffect(() => {
     fetchStreams();
   }, []);
+
+  const stats: PlatformStats[] = useMemo(() => {
+    return (['youtube', 'twitch', 'kick', 'facebook'] as Platform[]).map(p => ({
+      platform: p,
+      liveCount: streams.filter(s => s.platform === p).length,
+      totalViewers: streams.filter(s => s.platform === p).reduce((sum, s) => sum + s.viewerCount, 0)
+    }));
+  }, [streams]);
 
   const filteredStreams = useMemo(() => {
     return streams.filter((s) => {
@@ -78,7 +86,7 @@ export default function Home() {
 
   return (
     <main className="min-h-screen bg-[#050505] text-white selection:bg-red-500/30">
-      <Header streams={streams} />
+      <Header stats={stats} totalStreams={streams.length} />
       
       {/* Background Ambient Glows */}
       <div className="fixed inset-0 overflow-hidden pointer-events-none">
@@ -160,7 +168,7 @@ export default function Home() {
                   onClick={() => handleStreamClick(s)}
                   className={`cursor-pointer transition-all ${focusedStream?.id === s.id ? 'ring-2 ring-red-500 rounded-xl' : ''}`}
                 >
-                  <StreamCard stream={s} />
+                  <StreamCard stream={s} onClick={handleStreamClick} isSelected={focusedStream?.id === s.id} />
                 </div>
               ))
             ) : (
@@ -177,7 +185,7 @@ export default function Home() {
             )}
           </div>
 
-          <StatsBar streams={filteredStreams} />
+          <StatsBar stats={stats} />
         </div>
 
         {/* Right Area: Globe */}
