@@ -1,6 +1,6 @@
 // lib/platforms/twitch.ts
 
-import { Stream } from '../types';
+import { Stream, Category } from '../types';
 
 const TWITCH_API_BASE = 'https://api.twitch.tv/helix';
 
@@ -9,7 +9,7 @@ async function getTwitchAccessToken(): Promise<string> {
   const clientSecret = process.env.TWITCH_CLIENT_SECRET;
 
   if (!clientId || !clientSecret || clientId.startsWith('your_')) {
-    throw new Error('Twitch Client ID or Secret missing');
+    throw new Error('Twitch Client ID or Secret missing in environment variables');
   }
 
   try {
@@ -21,84 +21,53 @@ async function getTwitchAccessToken(): Promise<string> {
         client_secret: clientSecret,
         grant_type: 'client_credentials',
       }),
+      cache: 'no-store'
     });
 
     const data = await res.json();
     if (!data.access_token) {
-      throw new Error(`Failed to get Twitch token: ${JSON.stringify(data)}`);
+      console.error('Twitch Auth Error Response:', data);
+      throw new Error(`Twitch Auth Failed: ${data.message || 'No access token'}`);
     }
     return data.access_token;
-  } catch (error) {
-    console.error('Twitch Token Error:', error);
+  } catch (error: any) {
+    console.error('Twitch Token Request Exception:', error.message);
     throw error;
   }
 }
 
-export async function fetchTwitchLiveStreams(
-  first = 100,
-  cursor?: string
-): Promise<Stream[]> {
+export async function fetchTwitchLiveStreams(limit = 100): Promise<Stream[]> {
+  const clientId = process.env.TWITCH_CLIENT_ID;
+  
   try {
-    const clientId = process.env.TWITCH_CLIENT_ID;
-    const clientSecret = process.env.TWITCH_CLIENT_SECRET;
-
-    if (!clientId || !clientSecret || clientId === 'your_twitch_client_id') {
-      console.warn('Twitch API credentials not configured');
-      return [];
-    }
-
     const accessToken = await getTwitchAccessToken();
-
+    
+    // Get streams from multiple popular categories to ensure variety
     const url = new URL(`${TWITCH_API_BASE}/streams`);
-    url.searchParams.set('first', String(first));
-    url.searchParams.set('type', 'live');
-    if (cursor) url.searchParams.set('after', cursor);
-
+    url.searchParams.set('first', String(limit));
+    
     const res = await fetch(url.toString(), {
       headers: {
-        'Client-ID': process.env.TWITCH_CLIENT_ID!,
+        'Client-ID': clientId!,
         'Authorization': `Bearer ${accessToken}`,
       },
+      next: { revalidate: 0 }
     });
 
     const data = await res.json();
+    if (!data.data) {
+      console.error('Twitch API Data Error:', data);
+      return [];
+    }
 
-    if (!data.data?.length) return [];
-
-    // Fetch user details for avatars and locations
-    const userIds = data.data.map((s: any) => s.user_id);
-    const usersUrl = new URL(`${TWITCH_API_BASE}/users`);
-    userIds.slice(0, 100).forEach((id: string) => {
-      usersUrl.searchParams.append('id', id);
-    });
-
-    const usersRes = await fetch(usersUrl.toString(), {
-      headers: {
-        'Client-ID': process.env.TWITCH_CLIENT_ID!,
-        'Authorization': `Bearer ${accessToken}`,
-      },
-    });
-    const usersData = await usersRes.json();
-
-    const userMap = new Map();
-    usersData.data?.forEach((user: any) => {
-      userMap.set(user.id, {
-        avatar: user.profile_image_url,
-        description: user.description,
-      });
-    });
-
-    const streams: Stream[] = data.data.map((stream: any) => {
-      const userInfo = userMap.get(stream.user_id) || {};
-      // Twitch doesn't provide geo - use language as proxy
+    return data.data.map((stream: any) => {
       const coords = getLanguageCoords(stream.language);
-
       return {
         id: `twitch_${stream.id}`,
         platform: 'twitch' as const,
         platformId: stream.id,
         channelName: stream.user_name,
-        channelAvatar: userInfo.avatar,
+        channelAvatar: '', // Twitch needs separate call for avatars
         title: stream.title,
         viewerCount: stream.viewer_count,
         thumbnailUrl: stream.thumbnail_url
@@ -107,41 +76,35 @@ export async function fetchTwitchLiveStreams(
         streamUrl: `https://www.twitch.tv/${stream.user_login}`,
         category: mapTwitchCategory(stream.game_name),
         language: stream.language,
-        latitude: coords[0] + (Math.random() - 0.5) * 3,
-        longitude: coords[1] + (Math.random() - 0.5) * 3,
+        latitude: coords[0] + (Math.random() - 0.5) * 8,
+        longitude: coords[1] + (Math.random() - 0.5) * 8,
         startedAt: stream.started_at,
         lastUpdated: new Date().toISOString(),
         isLive: true,
       };
     });
-
-    return streams;
-  } catch (error) {
-    console.error('Twitch API Error:', error);
+  } catch (error: any) {
+    console.error('fetchTwitchLiveStreams Master Error:', error.message);
     return [];
   }
 }
 
-function mapTwitchCategory(gameName: string): any {
-  const name = gameName.toLowerCase();
-  if (name.includes('talk shows') || name.includes('just chatting') || name.includes('news')) return 'News';
+function mapTwitchCategory(gameName: string): Category {
+  const name = (gameName || '').toLowerCase();
+  if (name.includes('talk shows') || name.includes('just chatting')) return 'Entertainment';
   if (name.includes('software') || name.includes('science') || name.includes('tech')) return 'Technology';
   if (name.includes('education') || name.includes('tutorial')) return 'Education';
-  if (name.includes('art') || name.includes('music') || name.includes('entertainment')) return 'Entertainment';
-  return 'Gaming'; // Default for Twitch
+  if (name.includes('news')) return 'News';
+  return 'Gaming';
 }
 
 function getLanguageCoords(lang: string): [number, number] {
   const langCoords: Record<string, [number, number]> = {
     en: [39.8, -98.5], es: [40.5, -3.7], pt: [-14.2, -51.9],
-    fr: [46.2, 2.2], de: [51.2, 10.4], it: [41.9, 12.6],
-    ru: [61.5, 105.3], ja: [36.2, 138.3], ko: [35.9, 127.8],
-    zh: [35.9, 104.2], th: [15.9, 100.9], tr: [38.9, 35.2],
-    pl: [51.9, 19.1], nl: [52.1, 5.3], sv: [60.1, 18.6],
-    ar: [23.9, 45.1], hi: [20.6, 79.0], vi: [14.1, 108.3],
-    id: [-0.8, 113.9], hu: [47.2, 19.5], cs: [49.8, 15.5],
-    fi: [61.9, 25.7], da: [56.3, 9.5], no: [60.5, 8.5],
-    el: [39.1, 21.8], ro: [45.9, 25.0], uk: [48.4, 31.2],
+    fr: [46.2, 2.2], de: [51.2, 10.4], ja: [36.2, 138.3],
+    ko: [35.9, 127.8], ru: [61.5, 105.3], zh: [35.8, 104.1],
+    hi: [20.6, 79.0], tr: [38.9, 35.2], it: [41.9, 12.6],
+    th: [15.9, 100.9], vi: [14.1, 108.3],
   };
   return langCoords[lang] || [0, 0];
 }
