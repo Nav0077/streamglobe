@@ -4,19 +4,17 @@ import { Stream, Category } from '../types';
 
 const YOUTUBE_API_BASE = 'https://www.googleapis.com/youtube/v3';
 
-// Map our categories to YouTube Search Queries
-const CATEGORY_QUERIES: Record<Category, string> = {
-  Gaming: 'gaming live stream',
-  News: 'news live stream',
-  Entertainment: 'entertainment live',
-  Education: 'education tutorial live',
-  Technology: 'technology tech live',
-  Other: 'live'
+// Expanded categories for maximum discovery
+const CATEGORY_QUERIES: Record<Category, string[]> = {
+  Gaming: ['gaming live', 'esports live', 'fortnite live', 'minecraft live', 'cod live'],
+  News: ['news live', 'breaking news live', 'world news live'],
+  Entertainment: ['music live', 'entertainment live', 'talk show live', 'vlog live'],
+  Education: ['study live', 'education live', 'learning live', 'lecture live'],
+  Technology: ['tech live', 'coding live', 'space live', 'science live'],
+  Other: ['live stream', 'trending live', 'top live']
 };
 
-export async function fetchYouTubeLiveStreams(
-  maxResultsPerCategory = 15
-): Promise<Stream[]> {
+export async function fetchYouTubeLiveStreams(): Promise<Stream[]> {
   const API_KEY = process.env.YOUTUBE_API_KEY;
   if (!API_KEY || API_KEY === 'your_youtube_api_key_here') {
     console.warn('YouTube API Key not configured');
@@ -26,10 +24,17 @@ export async function fetchYouTubeLiveStreams(
   try {
     const allCategories = Object.keys(CATEGORY_QUERIES) as Category[];
     
-    // Fetch multiple categories in parallel to get variety
-    const categoryResults = await Promise.allSettled(
-      allCategories.map(cat => fetchCategory(cat, maxResultsPerCategory, API_KEY))
-    );
+    // Fetch multiple queries per category to expand the pool
+    const fetchPromises: Promise<Stream[]>[] = [];
+    
+    allCategories.forEach(cat => {
+      // Pick top 2 queries for each category to keep quota usage reasonable but coverage high
+      CATEGORY_QUERIES[cat].slice(0, 2).forEach(query => {
+        fetchPromises.push(fetchQuery(cat, query, 50, API_KEY));
+      });
+    });
+
+    const categoryResults = await Promise.allSettled(fetchPromises);
 
     const mergedStreams: Stream[] = [];
     categoryResults.forEach(res => {
@@ -42,21 +47,24 @@ export async function fetchYouTubeLiveStreams(
     const uniqueMap = new Map();
     mergedStreams.forEach(s => uniqueMap.set(s.platformId, s));
     
-    return Array.from(uniqueMap.values());
+    const finalStreams = Array.from(uniqueMap.values());
+    console.log(`✅ YouTube: Discovered ${finalStreams.length} total unique live streams`);
+    
+    return finalStreams;
   } catch (error) {
     console.error('YouTube API Master Error:', error);
     return [];
   }
 }
 
-async function fetchCategory(category: Category, maxResults: number, apiKey: string): Promise<Stream[]> {
+async function fetchQuery(category: Category, query: string, maxResults: number, apiKey: string): Promise<Stream[]> {
   try {
     const searchUrl = new URL(`${YOUTUBE_API_BASE}/search`);
     searchUrl.searchParams.set('part', 'snippet');
     searchUrl.searchParams.set('type', 'video');
     searchUrl.searchParams.set('eventType', 'live');
-    searchUrl.searchParams.set('order', 'viewCount');
-    searchUrl.searchParams.set('q', CATEGORY_QUERIES[category]);
+    searchUrl.searchParams.set('order', 'viewCount'); // Get the most popular ones
+    searchUrl.searchParams.set('q', query);
     searchUrl.searchParams.set('maxResults', String(maxResults));
     searchUrl.searchParams.set('key', apiKey);
 
@@ -65,7 +73,11 @@ async function fetchCategory(category: Category, maxResults: number, apiKey: str
 
     if (!searchData.items?.length) return [];
 
-    const videoIds = searchData.items.map((item: any) => item.id.videoId).join(',');
+    // Filter out items that are not actually live (sometimes YouTube API returns upcoming)
+    const liveItems = searchData.items.filter((item: any) => item.snippet.liveBroadcastContent === 'live');
+    if (liveItems.length === 0) return [];
+
+    const videoIds = liveItems.map((item: any) => item.id.videoId).join(',');
     const detailsUrl = new URL(`${YOUTUBE_API_BASE}/videos`);
     detailsUrl.searchParams.set('part', 'liveStreamingDetails,statistics,snippet');
     detailsUrl.searchParams.set('id', videoIds);
@@ -75,11 +87,11 @@ async function fetchCategory(category: Category, maxResults: number, apiKey: str
     const detailsData = await detailsRes.json();
 
     const channelIds = Array.from(new Set(
-      searchData.items.map((item: any) => item.snippet.channelId)
+      liveItems.map((item: any) => item.snippet.channelId)
     )).join(',');
     
     const channelUrl = new URL(`${YOUTUBE_API_BASE}/channels`);
-    channelUrl.searchParams.set('part', 'snippet,brandingSettings');
+    channelUrl.searchParams.set('part', 'snippet');
     channelUrl.searchParams.set('id', channelIds);
     channelUrl.searchParams.set('key', apiKey);
 
@@ -108,10 +120,10 @@ async function fetchCategory(category: Category, maxResults: number, apiKey: str
         viewerCount: parseInt(video.liveStreamingDetails?.concurrentViewers || '0'),
         thumbnailUrl: video.snippet.thumbnails?.medium?.url,
         streamUrl: `https://www.youtube.com/watch?v=${video.id}`,
-        category: category, // Force the category from the search query
+        category: category,
         language: video.snippet.defaultLanguage,
-        latitude: coords[0] + (Math.random() - 0.5) * 2,
-        longitude: coords[1] + (Math.random() - 0.5) * 2,
+        latitude: coords[0] + (Math.random() - 0.5) * 4, // Spread them more for better visibility
+        longitude: coords[1] + (Math.random() - 0.5) * 4,
         country: channelInfo.country,
         startedAt: video.liveStreamingDetails?.actualStartTime,
         lastUpdated: new Date().toISOString(),
@@ -119,7 +131,7 @@ async function fetchCategory(category: Category, maxResults: number, apiKey: str
       };
     }) || [];
   } catch (e) {
-    console.error(`Error fetching category ${category}:`, e);
+    console.error(`Error fetching query "${query}":`, e);
     return [];
   }
 }
