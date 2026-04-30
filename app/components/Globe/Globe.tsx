@@ -30,6 +30,8 @@ export default function Globe({
   const thetaRef = useRef(0.3);
   const focusRef = useRef<[number, number] | null>(null);
   
+  // Zoom state
+  const [zoom, setZoom] = useState(1);
   const [width, setWidth] = useState(0);
 
   useEffect(() => {
@@ -46,10 +48,13 @@ export default function Globe({
   useEffect(() => {
     if (!canvasRef.current || !width) return;
 
+    // Adjust globe size based on zoom
+    const globeSize = width * zoom;
+
     const globe = createGlobe(canvasRef.current, {
       devicePixelRatio: 2,
-      width: width * 2,
-      height: width * 2,
+      width: globeSize * 2,
+      height: globeSize * 2,
       phi: phiRef.current,
       theta: thetaRef.current,
       dark: 1,
@@ -61,7 +66,7 @@ export default function Globe({
       glowColor: [1, 1, 1],
       markers: markers.map((m) => ({
         location: m.location,
-        size: 0.05, // Small dots as fallback
+        size: 0.05,
       })),
       onRender: (state) => {
         // Smooth auto-rotation
@@ -88,12 +93,17 @@ export default function Globe({
 
         state.phi = phiRef.current;
         state.theta = thetaRef.current;
-        state.width = width * 2;
-        state.height = width * 2;
+        
+        // Update size dynamically for zoom
+        state.width = width * zoom * 2;
+        state.height = width * zoom * 2;
 
         // Update HTML overlays for markers
         if (markersOverlayRef.current) {
           const overlays = markersOverlayRef.current.children;
+          const currentZoom = zoom;
+          const currentWidth = width;
+          
           markers.forEach((m, i) => {
             const overlay = overlays[i] as HTMLElement;
             if (!overlay) return;
@@ -106,10 +116,15 @@ export default function Globe({
             const y = Math.sin(latRad) * Math.cos(state.theta) - Math.cos(latRad) * Math.cos(lngRad + state.phi) * Math.sin(state.theta);
             const z = Math.cos(latRad) * Math.cos(lngRad + state.phi) * Math.cos(state.theta) + Math.sin(latRad) * Math.sin(state.theta);
 
-            // Only show if on the front side of the globe
             if (z > 0) {
               overlay.style.opacity = '1';
-              overlay.style.transform = `translate(-50%, -50%) translate(${width / 2 + x * width / 2}px, ${width / 2 - y * width / 2}px) scale(${0.5 + z * 0.5})`;
+              // Calculate position with zoom
+              const centerX = currentWidth / 2;
+              const centerY = currentWidth / 2;
+              const posX = centerX + (x * currentWidth * currentZoom / 2);
+              const posY = centerY - (y * currentWidth * currentZoom / 2);
+              
+              overlay.style.transform = `translate(-50%, -50%) translate(${posX}px, ${posY}px) scale(${(0.5 + z * 0.5) * Math.sqrt(currentZoom)})`;
               overlay.style.zIndex = Math.floor(z * 100).toString();
             } else {
               overlay.style.opacity = '0';
@@ -120,7 +135,26 @@ export default function Globe({
     });
 
     return () => globe.destroy();
-  }, [width, markers, isAutoRotating]);
+  }, [width, markers, isAutoRotating, zoom]);
+
+  // Handle Wheel Zoom
+  useEffect(() => {
+    const handleWheel = (e: WheelEvent) => {
+      e.preventDefault();
+      setZoom((prev) => {
+        const next = prev - e.deltaY * 0.001;
+        return Math.min(Math.max(next, 0.5), 5); // Zoom range: 0.5x to 5x
+      });
+    };
+
+    const container = containerRef.current;
+    if (container) {
+      container.addEventListener('wheel', handleWheel, { passive: false });
+    }
+    return () => {
+      if (container) container.removeEventListener('wheel', handleWheel);
+    };
+  }, []);
 
   // Update focusRef when focusPoint changes
   useEffect(() => {
@@ -143,7 +177,7 @@ export default function Globe({
     if (pointerInteracting.current !== null) {
       const delta = e.clientX - pointerInteracting.current;
       pointerInteractionMovement.current = delta;
-      phiRef.current += delta / 200;
+      phiRef.current += delta / (200 / zoom); // Slower drag when zoomed in
       pointerInteracting.current = e.clientX;
     }
   };
@@ -151,18 +185,44 @@ export default function Globe({
   return (
     <div 
       ref={containerRef}
-      className="relative w-full aspect-square max-w-[800px] mx-auto overflow-visible select-none"
+      className="relative w-full aspect-square max-w-[800px] mx-auto overflow-hidden select-none cursor-crosshair rounded-full shadow-2xl"
       onPointerDown={onPointerDown}
       onPointerUp={onPointerUp}
       onPointerMove={onPointerMove}
       onPointerLeave={onPointerUp}
     >
-      <canvas
-        ref={canvasRef}
-        className="w-full h-full cursor-grab outline-none"
-        style={{ width: '100%', height: '100%' }}
-      />
+      <div 
+        className="absolute inset-0 flex items-center justify-center transition-transform duration-75"
+        style={{ transform: `scale(${1})` }}
+      >
+        <canvas
+          ref={canvasRef}
+          className="cursor-grab outline-none transition-opacity duration-1000"
+          style={{ 
+            width: width * zoom, 
+            height: width * zoom,
+            maxWidth: 'none',
+            maxHeight: 'none'
+          }}
+        />
+      </div>
       
+      {/* Zoom Controls Overlay */}
+      <div className="absolute bottom-12 right-12 flex flex-col gap-2 z-50 pointer-events-auto">
+        <button 
+          onClick={() => setZoom(z => Math.min(z + 0.5, 5))}
+          className="w-10 h-10 bg-black/60 backdrop-blur-md rounded-full border border-white/20 flex items-center justify-center text-white font-bold hover:bg-white/10 transition-colors"
+        >
+          +
+        </button>
+        <button 
+          onClick={() => setZoom(z => Math.max(z - 0.5, 0.5))}
+          className="w-10 h-10 bg-black/60 backdrop-blur-md rounded-full border border-white/20 flex items-center justify-center text-white font-bold hover:bg-white/10 transition-colors"
+        >
+          −
+        </button>
+      </div>
+
       {/* Markers Overlay */}
       <div 
         ref={markersOverlayRef}
