@@ -4,15 +4,20 @@ import { Stream, Category } from '../types';
 
 const YOUTUBE_API_BASE = 'https://www.googleapis.com/youtube/v3';
 
-// Expanded categories for maximum discovery
-const CATEGORY_QUERIES: Record<Category, string[]> = {
-  Gaming: ['gaming live', 'esports live', 'fortnite live', 'minecraft live', 'cod live'],
-  News: ['news live', 'breaking news live', 'world news live'],
-  Entertainment: ['music live', 'entertainment live', 'talk show live', 'vlog live'],
-  Education: ['study live', 'education live', 'learning live', 'lecture live'],
-  Technology: ['tech live', 'coding live', 'space live', 'science live'],
-  Other: ['live stream', 'trending live', 'top live']
-};
+// Highly optimized queries to catch "everything" live
+const DISCOVERY_QUERIES = [
+  { cat: 'Gaming' as Category, q: 'valorant live' },
+  { cat: 'Gaming' as Category, q: 'pubg live' },
+  { cat: 'Gaming' as Category, q: 'gaming' },
+  { cat: 'News' as Category, q: 'breaking news' },
+  { cat: 'News' as Category, q: 'nepal news live' },
+  { cat: 'News' as Category, q: 'india news live' },
+  { cat: 'Entertainment' as Category, q: 'vlog live' },
+  { cat: 'Entertainment' as Category, q: 'birthday live' },
+  { cat: 'Education' as Category, q: 'class live' },
+  { cat: 'Technology' as Category, q: 'tech live' },
+  { cat: 'Other' as Category, q: 'live' },
+];
 
 export async function fetchYouTubeLiveStreams(): Promise<Stream[]> {
   const API_KEY = process.env.YOUTUBE_API_KEY;
@@ -22,62 +27,63 @@ export async function fetchYouTubeLiveStreams(): Promise<Stream[]> {
   }
 
   try {
-    const allCategories = Object.keys(CATEGORY_QUERIES) as Category[];
+    // Fetch from multiple regions to get global + local coverage
+    const regions = ['US', 'IN', 'NP', 'GB', 'BR'];
     
-    // Fetch multiple queries per category to expand the pool
     const fetchPromises: Promise<Stream[]>[] = [];
     
-    allCategories.forEach(cat => {
-      // Pick top 2 queries for each category to keep quota usage reasonable but coverage high
-      CATEGORY_QUERIES[cat].slice(0, 2).forEach(query => {
-        fetchPromises.push(fetchQuery(cat, query, 50, API_KEY));
-      });
+    // 1. General discovery across categories
+    DISCOVERY_QUERIES.forEach(dq => {
+      fetchPromises.push(fetchQuery(dq.cat, dq.q, 25, API_KEY));
     });
 
-    const categoryResults = await Promise.allSettled(fetchPromises);
+    // 2. Region-specific top live streams (using common terms for each region)
+    regions.forEach(region => {
+      fetchPromises.push(fetchQuery('Other', '', 25, API_KEY, region));
+    });
+
+    const allResults = await Promise.allSettled(fetchPromises);
 
     const mergedStreams: Stream[] = [];
-    categoryResults.forEach(res => {
+    allResults.forEach(res => {
       if (res.status === 'fulfilled') {
         mergedStreams.push(...res.value);
       }
     });
 
-    // Remove duplicates (by platformId)
+    // Deduplicate by platformId
     const uniqueMap = new Map();
     mergedStreams.forEach(s => uniqueMap.set(s.platformId, s));
     
-    const finalStreams = Array.from(uniqueMap.values());
-    console.log(`✅ YouTube: Discovered ${finalStreams.length} total unique live streams`);
-    
+    const finalStreams = Array.from(uniqueMap.values())
+      .sort((a, b) => b.viewerCount - a.viewerCount); // Sort by popularity
+      
+    console.log(`✅ YouTube: Merged ${finalStreams.length} unique live streams`);
     return finalStreams;
   } catch (error) {
-    console.error('YouTube API Master Error:', error);
+    console.error('YouTube Master Error:', error);
     return [];
   }
 }
 
-async function fetchQuery(category: Category, query: string, maxResults: number, apiKey: string): Promise<Stream[]> {
+async function fetchQuery(category: Category, q: string, maxResults: number, apiKey: string, region?: string): Promise<Stream[]> {
   try {
-    const searchUrl = new URL(`${YOUTUBE_API_BASE}/search`);
-    searchUrl.searchParams.set('part', 'snippet');
-    searchUrl.searchParams.set('type', 'video');
-    searchUrl.searchParams.set('eventType', 'live');
-    searchUrl.searchParams.set('order', 'viewCount'); // Get the most popular ones
-    searchUrl.searchParams.set('q', query);
-    searchUrl.searchParams.set('maxResults', String(maxResults));
-    searchUrl.searchParams.set('key', apiKey);
+    const url = new URL(`${YOUTUBE_API_BASE}/search`);
+    url.searchParams.set('part', 'snippet');
+    url.searchParams.set('type', 'video');
+    url.searchParams.set('eventType', 'live');
+    url.searchParams.set('order', 'viewCount');
+    if (q) url.searchParams.set('q', q);
+    if (region) url.searchParams.set('regionCode', region);
+    url.searchParams.set('maxResults', String(maxResults));
+    url.searchParams.set('key', apiKey);
 
-    const searchRes = await fetch(searchUrl.toString());
-    const searchData = await searchRes.json();
+    const res = await fetch(url.toString());
+    const data = await res.json();
 
-    if (!searchData.items?.length) return [];
+    if (!data.items?.length) return [];
 
-    // Filter out items that are not actually live (sometimes YouTube API returns upcoming)
-    const liveItems = searchData.items.filter((item: any) => item.snippet.liveBroadcastContent === 'live');
-    if (liveItems.length === 0) return [];
-
-    const videoIds = liveItems.map((item: any) => item.id.videoId).join(',');
+    const videoIds = data.items.map((item: any) => item.id.videoId).join(',');
     const detailsUrl = new URL(`${YOUTUBE_API_BASE}/videos`);
     detailsUrl.searchParams.set('part', 'liveStreamingDetails,statistics,snippet');
     detailsUrl.searchParams.set('id', videoIds);
@@ -87,7 +93,7 @@ async function fetchQuery(category: Category, query: string, maxResults: number,
     const detailsData = await detailsRes.json();
 
     const channelIds = Array.from(new Set(
-      liveItems.map((item: any) => item.snippet.channelId)
+      data.items.map((item: any) => item.snippet.channelId)
     )).join(',');
     
     const channelUrl = new URL(`${YOUTUBE_API_BASE}/channels`);
@@ -108,7 +114,7 @@ async function fetchQuery(category: Category, query: string, maxResults: number,
 
     return detailsData.items?.map((video: any) => {
       const channelInfo = channelMap.get(video.snippet.channelId) || {};
-      const coords = getCountryCoords(channelInfo.country || 'US');
+      const coords = getCountryCoords(channelInfo.country || region || 'US');
 
       return {
         id: `youtube_${video.id}`,
@@ -122,16 +128,15 @@ async function fetchQuery(category: Category, query: string, maxResults: number,
         streamUrl: `https://www.youtube.com/watch?v=${video.id}`,
         category: category,
         language: video.snippet.defaultLanguage,
-        latitude: coords[0] + (Math.random() - 0.5) * 4, // Spread them more for better visibility
-        longitude: coords[1] + (Math.random() - 0.5) * 4,
-        country: channelInfo.country,
+        latitude: coords[0] + (Math.random() - 0.5) * 5,
+        longitude: coords[1] + (Math.random() - 0.5) * 5,
+        country: channelInfo.country || region,
         startedAt: video.liveStreamingDetails?.actualStartTime,
         lastUpdated: new Date().toISOString(),
         isLive: true,
       };
     }) || [];
   } catch (e) {
-    console.error(`Error fetching query "${query}":`, e);
     return [];
   }
 }
@@ -149,6 +154,7 @@ function getCountryCoords(countryCode: string): [number, number] {
     AR: [-38.4, -63.6], CO: [4.6, -74.3], CL: [-35.7, -71.5],
     SA: [23.9, 45.1], AE: [23.4, 53.8], EG: [26.8, 30.8],
     ZA: [-30.6, 22.9], NG: [9.1, 8.7], KE: [-0.0, 37.9],
+    NP: [28.4, 84.1]
   };
   return coords[countryCode] || [0, 0];
 }
