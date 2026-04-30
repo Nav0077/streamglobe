@@ -6,6 +6,7 @@ import { useState, useEffect, useMemo, useCallback } from 'react';
 import Header from './components/UI/Header';
 import StatsBar from './components/UI/StatsBar';
 import StreamCard from './components/StreamPanel/StreamCard';
+import StreamDetails from './components/StreamPanel/StreamDetails';
 import Globe from './components/Globe/Globe';
 import { Stream, Platform, Category, PlatformStats } from '@/lib/types';
 import { PLATFORM_COLORS } from '@/lib/constants';
@@ -75,17 +76,13 @@ export default function Home() {
     );
   };
 
-  const handleStreamClick = (stream: Stream) => {
+  const handleStreamSelect = (stream: Stream) => {
     setFocusedStream(stream);
     setIsAutoRotating(false);
-    // Smooth scroll to top on mobile
-    if (window.innerWidth < 1024) {
-      window.scrollTo({ top: 0, behavior: 'smooth' });
-    }
   };
 
   return (
-    <main className="min-h-screen bg-[#050505] text-white selection:bg-red-500/30">
+    <main className="min-h-screen bg-[#050505] text-white selection:bg-red-500/30 overflow-hidden">
       <Header stats={stats} totalStreams={streams.length} />
       
       {/* Background Ambient Glows */}
@@ -94,7 +91,7 @@ export default function Home() {
         <div className="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] bg-purple-600/10 rounded-full blur-[120px] animate-pulse" style={{ animationDelay: '1s' }} />
       </div>
 
-      <div className="relative flex flex-col lg:flex-row h-[calc(100vh-64px)] overflow-hidden">
+      <div className="relative flex flex-col lg:flex-row h-[calc(100vh-64px)] top-[64px]">
         
         {/* Left Sidebar: Controls & List */}
         <div className="w-full lg:w-[400px] xl:w-[450px] flex flex-col border-r border-white/5 bg-black/40 backdrop-blur-xl z-20">
@@ -105,12 +102,11 @@ export default function Home() {
             <div className="relative">
               <input 
                 type="text" 
-                placeholder="Search channels or titles..."
+                placeholder="Search channels..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 className="w-full bg-white/5 border border-white/10 rounded-lg px-4 py-2 text-sm focus:outline-none focus:border-red-500/50 transition-colors"
               />
-              <span className="absolute right-3 top-2.5 text-gray-500 text-xs">⌘K</span>
             </div>
 
             {/* Platforms */}
@@ -131,14 +127,14 @@ export default function Home() {
             </div>
 
             {/* Categories */}
-            <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-hide no-scrollbar">
+            <div className="flex gap-2 overflow-x-auto pb-1 no-scrollbar">
               <button
                 onClick={() => setSelectedCategory('All')}
                 className={`px-3 py-1 rounded-md text-[10px] font-medium whitespace-nowrap transition-colors ${
                   selectedCategory === 'All' ? 'bg-red-500 text-white' : 'bg-white/5 text-gray-400 hover:bg-white/10'
                 }`}
               >
-                All Categories
+                All
               </button>
               {CATEGORIES.map((cat) => (
                 <button
@@ -157,30 +153,21 @@ export default function Home() {
           {/* Stream List */}
           <div className="flex-1 overflow-y-auto custom-scrollbar p-4 space-y-3">
             {loading ? (
-              // Loading Skeleton
               Array.from({ length: 6 }).map((_, i) => (
-                <div key={i} className="h-24 bg-white/5 rounded-xl animate-pulse" />
+                <div key={i} className="h-20 bg-white/5 rounded-xl animate-pulse" />
               ))
             ) : filteredStreams.length > 0 ? (
               filteredStreams.map((s) => (
-                <div 
+                <StreamCard 
                   key={s.id} 
-                  onClick={() => handleStreamClick(s)}
-                  className={`cursor-pointer transition-all ${focusedStream?.id === s.id ? 'ring-2 ring-red-500 rounded-xl' : ''}`}
-                >
-                  <StreamCard stream={s} onClick={handleStreamClick} isSelected={focusedStream?.id === s.id} />
-                </div>
+                  stream={s} 
+                  onClick={handleStreamSelect} 
+                  isSelected={focusedStream?.id === s.id} 
+                />
               ))
             ) : (
-              <div className="text-center py-20">
-                <div className="text-4xl mb-4">🛰️</div>
-                <p className="text-gray-500 text-sm">No live streams found for these filters.</p>
-                <button 
-                  onClick={() => { setSelectedPlatforms(['youtube', 'twitch', 'kick', 'facebook']); setSelectedCategory('All'); setSearchQuery(''); }}
-                  className="mt-4 text-red-400 text-xs hover:underline"
-                >
-                  Clear all filters
-                </button>
+              <div className="text-center py-20 text-gray-500 text-sm italic">
+                No streams found.
               </div>
             )}
           </div>
@@ -190,16 +177,16 @@ export default function Home() {
 
         {/* Right Area: Globe */}
         <div className="flex-1 relative bg-[radial-gradient(circle_at_center,rgba(20,20,20,1)_0%,rgba(5,5,5,1)_100%)]">
-          <div className="absolute inset-0 flex items-center justify-center p-4 sm:p-8">
+          <div className="absolute inset-0 flex items-center justify-center">
             <Globe
               markers={markers}
               focusPoint={focusedStream ? [focusedStream.latitude, focusedStream.longitude] : null}
               isAutoRotating={isAutoRotating}
-              onMarkerClick={handleStreamClick}
+              onMarkerClick={handleStreamSelect}
             />
           </div>
 
-          {/* Floating HUD */}
+          {/* Floating Controls */}
           <div className="absolute top-6 right-6 flex flex-col gap-3 pointer-events-none">
             <div className="glass-morphism p-3 rounded-2xl border border-white/10 pointer-events-auto">
               <button
@@ -211,6 +198,12 @@ export default function Home() {
               </button>
             </div>
           </div>
+
+          {/* Details Sidebar overlay */}
+          <StreamDetails 
+            stream={focusedStream} 
+            onClose={() => setFocusedStream(null)} 
+          />
 
           {/* Bottom Platform Legend */}
           <div className="absolute bottom-6 left-1/2 -translate-x-1/2 flex items-center gap-4 glass-morphism px-6 py-3 rounded-full border border-white/10 z-30">
