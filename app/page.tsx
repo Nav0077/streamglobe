@@ -52,7 +52,12 @@ export default function Home() {
   const filteredStreams = useMemo(() => {
     return streams.filter((s) => {
       const platformMatch = selectedPlatforms.includes(s.platform);
-      const categoryMatch = selectedCategory === 'All' || s.category === selectedCategory;
+      
+      // Fallback for missing categories
+      const streamCategory = s.category || 'Other';
+      const categoryMatch = selectedCategory === 'All' || 
+                           streamCategory.toLowerCase() === selectedCategory.toLowerCase();
+      
       const searchMatch = searchQuery === '' || 
         s.channelName.toLowerCase().includes(searchQuery.toLowerCase()) ||
         s.title.toLowerCase().includes(searchQuery.toLowerCase());
