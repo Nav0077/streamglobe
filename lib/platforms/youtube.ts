@@ -4,27 +4,19 @@ import { Stream, Category } from '../types';
 
 const YOUTUBE_API_BASE = 'https://www.googleapis.com/youtube/v3';
 
-// Massive discovery list
+// Balanced discovery queries (Gaming, Entertainment, Tech focus)
 const DISCOVERY_QUERIES = [
   { cat: 'Gaming' as Category, q: 'gaming live' },
   { cat: 'Gaming' as Category, q: 'valorant' },
   { cat: 'Gaming' as Category, q: 'pubg' },
-  { cat: 'Gaming' as Category, q: 'fortnite' },
   { cat: 'Gaming' as Category, q: 'minecraft' },
-  { cat: 'Gaming' as Category, q: 'gta 5' },
-  { cat: 'News' as Category, q: 'breaking news live' },
-  { cat: 'News' as Category, q: 'world news' },
-  { cat: 'News' as Category, q: 'nepal news' },
-  { cat: 'News' as Category, q: 'india news' },
+  { cat: 'Gaming' as Category, q: 'esports' },
   { cat: 'Entertainment' as Category, q: 'vlog' },
   { cat: 'Entertainment' as Category, q: 'music live' },
-  { cat: 'Entertainment' as Category, q: 'asmr' },
-  { cat: 'Education' as Category, q: 'study with me' },
+  { cat: 'Entertainment' as Category, q: 'entertainment' },
   { cat: 'Education' as Category, q: 'tutorial' },
   { cat: 'Technology' as Category, q: 'coding' },
   { cat: 'Technology' as Category, q: 'space' },
-  { cat: 'Other' as Category, q: 'live' },
-  { cat: 'Other' as Category, q: 'trending' },
 ];
 
 export async function fetchYouTubeLiveStreams(): Promise<Stream[]> {
@@ -32,16 +24,18 @@ export async function fetchYouTubeLiveStreams(): Promise<Stream[]> {
   if (!API_KEY || API_KEY === 'your_youtube_api_key_here') return [];
 
   try {
-    const regions = ['US', 'IN', 'NP', 'GB', 'BR', 'JP', 'KR', 'DE', 'FR', 'ID'];
+    // Limit regions to key gaming/tech hubs to save quota and keep results relevant
+    const regions = ['US', 'IN', 'GB', 'BR', 'JP', 'KR'];
     const fetchPromises: Promise<Stream[]>[] = [];
     
-    // Mix general queries with regional top streams
+    // Fetch categorized content
     DISCOVERY_QUERIES.forEach(dq => {
-      fetchPromises.push(fetchQuery(dq.cat, dq.q, 50, API_KEY));
+      fetchPromises.push(fetchQuery(dq.cat, dq.q, 30, API_KEY));
     });
 
+    // Fetch regional general live (will filter out news later)
     regions.forEach(region => {
-      fetchPromises.push(fetchQuery('Other', '', 50, API_KEY, region));
+      fetchPromises.push(fetchQuery('Other', '', 20, API_KEY, region));
     });
 
     const results = await Promise.allSettled(fetchPromises);
@@ -51,11 +45,25 @@ export async function fetchYouTubeLiveStreams(): Promise<Stream[]> {
       if (res.status === 'fulfilled') merged.push(...res.value);
     });
 
+    // Deduplicate and FILTER OUT NEWS
     const uniqueMap = new Map();
-    merged.forEach(s => uniqueMap.set(s.platformId, s));
+    merged.forEach(s => {
+      const isNews = 
+        s.channelName.toLowerCase().includes('news') || 
+        s.title.toLowerCase().includes('news') ||
+        s.category === 'News';
+      
+      if (!isNews) {
+        uniqueMap.set(s.platformId, s);
+      }
+    });
     
-    const final = Array.from(uniqueMap.values()).sort((a, b) => b.viewerCount - a.viewerCount);
-    console.log(`🚀 YouTube: Massive discovery found ${final.length} unique streams`);
+    // Sort and limit to around 300 for stability
+    const final = Array.from(uniqueMap.values())
+      .sort((a, b) => b.viewerCount - a.viewerCount)
+      .slice(0, 350); 
+      
+    console.log(`✅ YouTube: Filtered discovery found ${final.length} streams (News excluded)`);
     return final;
   } catch (error) {
     return [];
@@ -113,8 +121,8 @@ async function fetchQuery(category: Category, q: string, maxResults: number, api
         streamUrl: `https://www.youtube.com/watch?v=${v.id}`,
         category,
         language: v.snippet.defaultLanguage,
-        latitude: coords[0] + (Math.random() - 0.5) * 10, // Massive spread for density
-        longitude: coords[1] + (Math.random() - 0.5) * 10,
+        latitude: coords[0] + (Math.random() - 0.5) * 6, 
+        longitude: coords[1] + (Math.random() - 0.5) * 6,
         country: info.country || region,
         startedAt: v.liveStreamingDetails?.actualStartTime,
         lastUpdated: new Date().toISOString(),
