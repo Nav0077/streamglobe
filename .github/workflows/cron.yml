@@ -1,0 +1,16 @@
+name: Refresh Streams Cron
+
+on:
+  schedule:
+    # Run every 5 minutes
+    - cron: '*/5 * * * *'
+  workflow_dispatch: # Allow manual trigger
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger Refresh API
+        run: |
+          curl -X GET "${{ secrets.PRODUCTION_URL }}/api/cron/refresh" \
+          -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}"
