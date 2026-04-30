@@ -23,7 +23,7 @@ export async function GET(request: NextRequest) {
     // Fetch from all platforms in parallel
     const [youtubeStreams, twitchStreams, kickStreams, facebookStreams] =
       await Promise.allSettled([
-        fetchYouTubeLiveStreams(50),
+        fetchYouTubeLiveStreams(),
         fetchTwitchLiveStreams(100),
         fetchKickLiveStreams(),
         fetchFacebookLiveStreams(),
