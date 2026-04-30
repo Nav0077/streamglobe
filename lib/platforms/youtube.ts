@@ -41,9 +41,9 @@ export async function fetchYouTubeLiveStreams(
     const detailsData = await detailsRes.json();
 
     // Step 3: Get channel details (for location)
-    const channelIds = [...new Set(
+    const channelIds = Array.from(new Set(
       searchData.items.map((item: any) => item.snippet.channelId)
-    )].join(',');
+    )).join(',');
     
     const channelUrl = new URL(`${YOUTUBE_API_BASE}/channels`);
     channelUrl.searchParams.set('part', 'snippet,brandingSettings');
