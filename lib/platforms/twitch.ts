@@ -5,22 +5,33 @@ import { Stream } from '../types';
 const TWITCH_API_BASE = 'https://api.twitch.tv/helix';
 
 async function getTwitchAccessToken(): Promise<string> {
-  // Use cached token if available
-  if (process.env.TWITCH_ACCESS_TOKEN) {
-    return process.env.TWITCH_ACCESS_TOKEN;
+  // Use cached token if available and NOT a placeholder
+  const cachedToken = process.env.TWITCH_ACCESS_TOKEN;
+  if (cachedToken && !cachedToken.startsWith('your_') && cachedToken.length > 10) {
+    return cachedToken;
+  }
+
+  const clientId = process.env.TWITCH_CLIENT_ID;
+  const clientSecret = process.env.TWITCH_CLIENT_SECRET;
+
+  if (!clientId || !clientSecret || clientId.startsWith('your_')) {
+    throw new Error('Twitch Client ID or Secret missing');
   }
 
   const res = await fetch('https://id.twitch.tv/oauth2/token', {
     method: 'POST',
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
     body: new URLSearchParams({
-      client_id: process.env.TWITCH_CLIENT_ID!,
-      client_secret: process.env.TWITCH_CLIENT_SECRET!,
+      client_id: clientId,
+      client_secret: clientSecret,
       grant_type: 'client_credentials',
     }),
   });
 
   const data = await res.json();
+  if (!data.access_token) {
+    throw new Error(`Failed to get Twitch token: ${JSON.stringify(data)}`);
+  }
   return data.access_token;
 }
 
