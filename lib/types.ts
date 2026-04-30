@@ -2,6 +2,8 @@
 
 export type Platform = 'youtube' | 'twitch' | 'kick' | 'facebook';
 
+export type Category = 'Gaming' | 'News' | 'Entertainment' | 'Education' | 'Technology' | 'Other';
+
 export interface Stream {
   id: string;
   platform: Platform;
@@ -12,7 +14,7 @@ export interface Stream {
   viewerCount: number;
   thumbnailUrl?: string;
   streamUrl: string;
-  category?: string;
+  category: Category;
   language?: string;
   latitude: number;
   longitude: number;

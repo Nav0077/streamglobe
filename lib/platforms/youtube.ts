@@ -78,7 +78,7 @@ export async function fetchYouTubeLiveStreams(
         ),
         thumbnailUrl: video.snippet.thumbnails?.medium?.url,
         streamUrl: `https://www.youtube.com/watch?v=${video.id}`,
-        category: video.snippet.categoryId,
+        category: mapYouTubeCategory(video.snippet.categoryId),
         language: video.snippet.defaultLanguage,
         latitude: coords[0] + (Math.random() - 0.5) * 2,
         longitude: coords[1] + (Math.random() - 0.5) * 2,
@@ -94,6 +94,16 @@ export async function fetchYouTubeLiveStreams(
     console.error('YouTube API Error:', error);
     return [];
   }
+}
+
+function mapYouTubeCategory(categoryId: string): any {
+  const cat = parseInt(categoryId);
+  if (cat === 20) return 'Gaming';
+  if (cat === 25) return 'News';
+  if (cat === 27) return 'Education';
+  if (cat === 28) return 'Technology';
+  if (cat === 10 || cat === 24 || cat === 1 || cat === 23) return 'Entertainment';
+  return 'Other';
 }
 
 // Approximate country center coordinates

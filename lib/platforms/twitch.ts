@@ -5,12 +5,6 @@ import { Stream } from '../types';
 const TWITCH_API_BASE = 'https://api.twitch.tv/helix';
 
 async function getTwitchAccessToken(): Promise<string> {
-  // Use cached token if available and NOT a placeholder
-  const cachedToken = process.env.TWITCH_ACCESS_TOKEN;
-  if (cachedToken && !cachedToken.startsWith('your_') && cachedToken.length > 10) {
-    return cachedToken;
-  }
-
   const clientId = process.env.TWITCH_CLIENT_ID;
   const clientSecret = process.env.TWITCH_CLIENT_SECRET;
 
@@ -18,21 +12,26 @@ async function getTwitchAccessToken(): Promise<string> {
     throw new Error('Twitch Client ID or Secret missing');
   }
 
-  const res = await fetch('https://id.twitch.tv/oauth2/token', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-    body: new URLSearchParams({
-      client_id: clientId,
-      client_secret: clientSecret,
-      grant_type: 'client_credentials',
-    }),
-  });
+  try {
+    const res = await fetch('https://id.twitch.tv/oauth2/token', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({
+        client_id: clientId,
+        client_secret: clientSecret,
+        grant_type: 'client_credentials',
+      }),
+    });
 
-  const data = await res.json();
-  if (!data.access_token) {
-    throw new Error(`Failed to get Twitch token: ${JSON.stringify(data)}`);
+    const data = await res.json();
+    if (!data.access_token) {
+      throw new Error(`Failed to get Twitch token: ${JSON.stringify(data)}`);
+    }
+    return data.access_token;
+  } catch (error) {
+    console.error('Twitch Token Error:', error);
+    throw error;
   }
-  return data.access_token;
 }
 
 export async function fetchTwitchLiveStreams(
@@ -106,7 +105,7 @@ export async function fetchTwitchLiveStreams(
           .replace('{width}', '440')
           .replace('{height}', '248'),
         streamUrl: `https://www.twitch.tv/${stream.user_login}`,
-        category: stream.game_name,
+        category: mapTwitchCategory(stream.game_name),
         language: stream.language,
         latitude: coords[0] + (Math.random() - 0.5) * 3,
         longitude: coords[1] + (Math.random() - 0.5) * 3,
@@ -121,6 +120,15 @@ export async function fetchTwitchLiveStreams(
     console.error('Twitch API Error:', error);
     return [];
   }
+}
+
+function mapTwitchCategory(gameName: string): any {
+  const name = gameName.toLowerCase();
+  if (name.includes('talk shows') || name.includes('just chatting') || name.includes('news')) return 'News';
+  if (name.includes('software') || name.includes('science') || name.includes('tech')) return 'Technology';
+  if (name.includes('education') || name.includes('tutorial')) return 'Education';
+  if (name.includes('art') || name.includes('music') || name.includes('entertainment')) return 'Entertainment';
+  return 'Gaming'; // Default for Twitch
 }
 
 function getLanguageCoords(lang: string): [number, number] {

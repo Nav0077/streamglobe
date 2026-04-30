@@ -42,17 +42,20 @@ export default function StreamCard({ stream, onClick, isSelected }: StreamCardPr
           </div>
         )}
         <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2">
-            <span className="text-white font-semibold text-sm truncate">
-              {stream.channelName}
-            </span>
-            <span
-              className="text-[10px] font-bold uppercase px-1.5 py-0.5 rounded"
-              style={{ backgroundColor: platformColor, color: 'white' }}
+          <div className="flex items-center justify-between mb-1">
+            <span 
+              className="text-[10px] font-bold uppercase tracking-wider"
+              style={{ color: PLATFORM_COLORS[stream.platform].hex }}
             >
-              {PLATFORM_LABELS[stream.platform]}
+              {stream.platform}
+            </span>
+            <span className="bg-white/10 text-white/60 text-[9px] px-1.5 py-0.5 rounded uppercase font-medium">
+              {stream.category}
             </span>
           </div>
+          <h3 className="text-sm font-bold truncate group-hover:text-red-400 transition-colors">
+            {stream.channelName}
+          </h3>
           <p className="text-gray-400 text-xs truncate mt-0.5">{stream.title}</p>
         </div>
         <div className="flex items-center gap-1 text-gray-400 text-xs shrink-0">
